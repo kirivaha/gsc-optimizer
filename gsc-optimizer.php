@@ -254,3 +254,52 @@ function gsc_opt_ajax_update_post()
         wp_send_json_error($e->getMessage());
     }
 }
+
+// ── AJAX: Debug — показати сирий контент поста ────────────────────────────────
+add_action('wp_ajax_gsc_opt_debug_content', 'gsc_opt_ajax_debug_content');
+
+function gsc_opt_ajax_debug_content()
+{
+    check_ajax_referer('gsc_opt_nonce', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('Forbidden');
+    }
+
+    $post_url = esc_url_raw($_POST['post_url'] ?? '');
+    $post_id = url_to_postid($post_url);
+
+    if (!$post_id) {
+        wp_send_json_error('Пост не знайдено для URL: ' . $post_url);
+    }
+
+    $post = get_post($post_id);
+
+    // Показуємо перші 3000 символів сирого контенту
+    $raw_preview = mb_substr($post->post_content, 0, 3000);
+
+    // Шукаємо carbon-fields блоки
+    $protected_names = [
+        'carbon-fields/treba-happybirthday-block',
+        'carbon-fields/treba-faq-block',
+        'carbon-fields/treba-important-block',
+        'carbon-fields/treba-important-list',
+    ];
+
+    $found_blocks = [];
+    foreach ($protected_names as $name) {
+        $escaped = preg_quote($name, '/');
+        if (preg_match('/<!--\s*wp:' . $escaped . '\b/i', $post->post_content)) {
+            $found_blocks[] = $name . ' — знайдено ✅';
+        } else {
+            $found_blocks[] = $name . ' — НЕ знайдено ❌';
+        }
+    }
+
+    wp_send_json_success([
+        'post_id' => $post_id,
+        'title' => $post->post_title,
+        'content_length' => mb_strlen($post->post_content),
+        'raw_preview' => htmlspecialchars($raw_preview),
+        'found_blocks' => $found_blocks,
+    ]);
+}
