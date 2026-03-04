@@ -15,6 +15,8 @@ if (isset($_POST['gsc_opt_save']) && check_admin_referer('gsc_opt_settings_save'
         'ai_provider' => in_array($_POST['ai_provider'] ?? '', ['gemini', 'openai'], true) ? $_POST['ai_provider'] : 'gemini',
         'ai_api_key' => sanitize_text_field($_POST['ai_api_key'] ?? ''),
         'threshold' => max(1, min(99, (float) ($_POST['threshold'] ?? 10))),
+        'period_current' => max(1, min(90, (int) ($_POST['period_current'] ?? 7))),
+        'period_compare' => max(1, min(90, (int) ($_POST['period_compare'] ?? 7))),
         'auto_run' => isset($_POST['auto_run']) ? 1 : 0,
     ];
     update_option('gsc_optimizer_settings', $settings);
@@ -111,6 +113,34 @@ $sa_json_preview = !empty($opts['sa_json'])
                     <p class="description">
                         При падінні кліків більше ніж на це значення — сторінка буде оновлена автоматично.<br>
                         Рекомендовано: <strong>10-20%</strong>.
+                    </p>
+                </td>
+            </tr>
+
+            <!-- Поточний період -->
+            <tr>
+                <th scope="row"><label for="period_current">Поточний період (днів)</label></th>
+                <td>
+                    <input type="number" id="period_current" name="period_current" class="small-text"
+                        value="<?= esc_attr($opts['period_current'] ?? 7) ?>" min="1" max="90" step="1">
+                    <span> днів</span>
+                    <p class="description">
+                        Кількість днів для <strong>поточного</strong> аналізу кліків.<br>
+                        Наприклад: <strong>7</strong> — аналізує останні 7 днів (вчора і раніше).
+                    </p>
+                </td>
+            </tr>
+
+            <!-- Період порівняння -->
+            <tr>
+                <th scope="row"><label for="period_compare">Період порівняння (днів)</label></th>
+                <td>
+                    <input type="number" id="period_compare" name="period_compare" class="small-text"
+                        value="<?= esc_attr($opts['period_compare'] ?? 7) ?>" min="1" max="90" step="1">
+                    <span> днів</span>
+                    <p class="description">
+                        Кількість днів для <strong>попереднього</strong> (контрольного) аналізу кліків.<br>
+                        Наприклад: <strong>7</strong> — порівнює із 7 днями, що передують поточному періоду.
                     </p>
                 </td>
             </tr>

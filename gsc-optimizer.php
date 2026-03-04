@@ -68,10 +68,15 @@ function gsc_opt_run_check()
 
     try {
         $gsc = new GSC_Opt_API($options['sa_json'], $options['site_url']);
+
+        // Діапазони з налаштувань (за замовчуванням: 7 і 7 днів)
+        $cur_days = max(1, (int) ($options['period_current'] ?? 7));
+        $prev_days = max(1, (int) ($options['period_compare'] ?? 7));
+
         $end_cur = date('Y-m-d', strtotime('-1 day'));
-        $start_cur = date('Y-m-d', strtotime('-7 days'));
-        $end_prev = date('Y-m-d', strtotime('-8 days'));
-        $start_prev = date('Y-m-d', strtotime('-14 days'));
+        $start_cur = date('Y-m-d', strtotime('-' . $cur_days . ' days'));
+        $end_prev = date('Y-m-d', strtotime('-' . ($cur_days + 1) . ' days'));
+        $start_prev = date('Y-m-d', strtotime('-' . ($cur_days + $prev_days) . ' days'));
 
         $current = $gsc->get_clicks_by_page($start_cur, $end_cur, 20);
         $previous = $gsc->get_clicks_by_page($start_prev, $end_prev, 20);
