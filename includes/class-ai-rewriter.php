@@ -159,15 +159,25 @@ class GSC_Opt_AI_Rewriter
 
         $faq_html = $this->ask_ai($faq_prompt);
 
-        // ── Додаємо в кінець ──────────────────────────────────────────────────
+        // ── Додаємо в кінець (з очищенням від Gutenberg-коментарів) ─────────
         $append = '';
 
-        if (!empty($table_html) && strpos($table_html, '<table') !== false) {
-            $append .= "\n\n" . $table_html;
+        if (!empty($table_html)) {
+            // Видаляємо Gutenberg-коментарі, але залишаємо HTML-теги таблиці
+            $table_html = preg_replace('/<!--.*?-->/s', '', $table_html);
+            $table_html = trim($table_html);
+            if (strpos($table_html, '<table') !== false) {
+                $append .= "\n\n" . $table_html;
+            }
         }
 
-        if (!empty($faq_html) && strpos($faq_html, '<div') !== false) {
-            $append .= "\n\n" . $faq_html;
+        if (!empty($faq_html)) {
+            // Видаляємо Gutenberg-коментарі, але залишаємо HTML-теги
+            $faq_html = preg_replace('/<!--.*?-->/s', '', $faq_html);
+            $faq_html = trim($faq_html);
+            if (strpos($faq_html, '<div') !== false || strpos($faq_html, '<h') !== false) {
+                $append .= "\n\n" . $faq_html;
+            }
         }
 
         if (empty($append)) {
