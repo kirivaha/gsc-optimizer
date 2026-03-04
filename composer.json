@@ -1,0 +1,11 @@
+{
+    "name": "hmara/gsc-optimizer",
+    "description": "WordPress plugin: GSC Optimizer",
+    "type": "wordpress-plugin",
+    "require": {
+        "google/apiclient": "^2.15"
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}
