@@ -43,18 +43,22 @@ class GSC_Opt_AI_Rewriter
         $index = 0;
 
         foreach ($this->protected_blocks as $block_name) {
-            // Екрануємо слеш для regex (treba/faq-block → treba\/faq-block)
             $escaped = preg_quote($block_name, '/');
 
-            // Шаблон: <!-- wp:treba/... --> ... <!-- /wp:treba/... -->
-            $pattern = '/<!--\s*wp:' . $escaped . '[\s\S]*?<!--\s*\/wp:' . $escaped . '\s*-->/i';
+            // Варіант 1: самозакривний блок <!-- wp:block-name {"attrs"} /-->
+            $pattern_self = '/<!--\s*wp:' . $escaped . '(\s[^-]*)?\s*\/-->/i';
 
-            $content = preg_replace_callback($pattern, function ($matches) use (&$extracted, &$index) {
-                $placeholder = '%%GSC_PROTECTED_BLOCK_' . $index . '%%';
-                $extracted[$placeholder] = $matches[0];
-                $index++;
-                return $placeholder;
-            }, $content);
+            // Варіант 2: блок з вмістом <!-- wp:block-name ... -->...<!-- /wp:block-name -->
+            $pattern_pair = '/<!--\s*wp:' . $escaped . '(\s[^-]*)?-->[\s\S]*?<!--\s*\/wp:' . $escaped . '\s*-->/i';
+
+            foreach ([$pattern_self, $pattern_pair] as $pattern) {
+                $content = preg_replace_callback($pattern, function ($matches) use (&$extracted, &$index) {
+                    $placeholder = '%%GSC_PROTECTED_BLOCK_' . $index . '%%';
+                    $extracted[$placeholder] = $matches[0];
+                    $index++;
+                    return $placeholder;
+                }, $content);
+            }
         }
 
         return [$content, $extracted];
@@ -86,7 +90,7 @@ class GSC_Opt_AI_Rewriter
             return $content; // Немає абзацу — залишаємо як є
         }
 
-        $original_tag = $matches[0]; // весь <p>...</p>
+        $original_tag = $matches[0];
         $original_text = strip_tags($matches[1]);
 
         if (mb_strlen($original_text) < 30) {
@@ -96,7 +100,7 @@ class GSC_Opt_AI_Rewriter
         $prompt = "Ти — SEO-копірайтер. Перепиши наступний абзац іншими словами, зберігши точний зміст, тон і ключові слова. "
             . "Заголовок сторінки: «{$post_title}». "
             . "Абзац для переписування:\n\n{$original_text}\n\n"
-            . "Відповідь — тільки новий текст абзацу, без пояснень і лапок.";
+            . "Відповідь — тільки новий текст абзацу, без HTML-тегів, без пояснень і лапок.";
 
         $new_text = $this->ask_ai($prompt);
 
@@ -104,11 +108,14 @@ class GSC_Opt_AI_Rewriter
             return $content;
         }
 
-        $new_tag = '<p>' . esc_html($new_text) . '</p>';
+        // Забираємо будь-які теги які AI міг додати, і загортаємо в <p>
+        $new_text = wp_strip_all_tags($new_text);
+        $new_tag = '<p>' . $new_text . '</p>';
         $new_content = str_replace($original_tag, $new_tag, $safe_content);
 
         // Повертаємо захищені блоки на місце
         return $this->restore_protected_blocks($new_content, $extracted);
+
     }
 
     /**
