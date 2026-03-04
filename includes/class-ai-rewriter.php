@@ -19,10 +19,10 @@ class GSC_Opt_AI_Rewriter
      * Формат: назва типу блоку (після wp:)
      */
     private array $protected_blocks = [
-        'treba/happybirthday-block',
-        'treba/faq-block',
-        'treba/important-block',
-        'treba/important-list',
+        'carbon-fields/treba-happybirthday-block',
+        'carbon-fields/treba-faq-block',
+        'carbon-fields/treba-important-block',
+        'carbon-fields/treba-important-list',
     ];
 
     public function __construct(string $provider, string $api_key)
