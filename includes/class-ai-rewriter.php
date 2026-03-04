@@ -45,11 +45,12 @@ class GSC_Opt_AI_Rewriter
         foreach ($this->protected_blocks as $block_name) {
             $escaped = preg_quote($block_name, '/');
 
-            // Варіант 1: самозакривний блок <!-- wp:block-name {"attrs"} /-->
-            $pattern_self = '/<!--\s*wp:' . $escaped . '(\s[^-]*)?\s*\/-->/i';
+            // Самозакривний блок: <!-- wp:carbon-fields/name {"attrs"} /-->
+            // Використовуємо .*? замість [^-]*, щоб атрибути з дефісами теж оброблялись
+            $pattern_self = '/<!--\s*wp:' . $escaped . '\b.*?\/-->/s';
 
-            // Варіант 2: блок з вмістом <!-- wp:block-name ... -->...<!-- /wp:block-name -->
-            $pattern_pair = '/<!--\s*wp:' . $escaped . '(\s[^-]*)?-->[\s\S]*?<!--\s*\/wp:' . $escaped . '\s*-->/i';
+            // Блок з вмістом: <!-- wp:carbon-fields/name ... --> ... <!-- /wp:carbon-fields/name -->
+            $pattern_pair = '/<!--\s*wp:' . $escaped . '\b.*?-->[\s\S]*?<!--\s*\/wp:' . $escaped . '\s*-->/';
 
             foreach ([$pattern_self, $pattern_pair] as $pattern) {
                 $content = preg_replace_callback($pattern, function ($matches) use (&$extracted, &$index) {
@@ -75,6 +76,20 @@ class GSC_Opt_AI_Rewriter
         return $content;
     }
 
+    /**
+     * Очищує відповідь AI від будь-яких Gutenberg-коментарів та HTML-тегів.
+     * Залишає лише чистий текст.
+     */
+    private function strip_gutenberg_markup(string $text): string
+    {
+        // Прибираємо Gutenberg коментарі <!-- wp:... --> та <!-- /wp:... -->
+        $text = preg_replace('/<!--.*?-->/s', '', $text);
+        // Прибираємо всі HTML-теги
+        $text = strip_tags($text);
+        // Прибираємо зайві пробіли
+        return trim(preg_replace('/\s+/', ' ', $text));
+    }
+
     // ── Публічні методи ───────────────────────────────────────────────────────
 
     /**
@@ -97,10 +112,10 @@ class GSC_Opt_AI_Rewriter
             return $content; // Занадто короткий — пропускаємо
         }
 
-        $prompt = "Ти — SEO-копірайтер. Перепиши наступний абзац іншими словами, зберігши точний зміст, тон і ключові слова. "
+        $prompt = "Ти — SEO-копірайтер. Перепиши наступний абзац іншими словами, зберігаючи зміст абзацу. "
             . "Заголовок сторінки: «{$post_title}». "
             . "Абзац для переписування:\n\n{$original_text}\n\n"
-            . "Відповідь — тільки новий текст абзацу, без HTML-тегів, без пояснень і лапок.";
+            . "Відповідь — ТІЛЬКИ новий текст абзацу. Без HTML, без markdown, без пояснень.";
 
         $new_text = $this->ask_ai($prompt);
 
@@ -108,15 +123,15 @@ class GSC_Opt_AI_Rewriter
             return $content;
         }
 
-        // Забираємо будь-які теги які AI міг додати, і загортаємо в <p>
-        $new_text = wp_strip_all_tags($new_text);
+        // Очищаємо відповідь AI від будь-якої розмітки
+        $new_text = $this->strip_gutenberg_markup($new_text);
         $new_tag = '<p>' . $new_text . '</p>';
         $new_content = str_replace($original_tag, $new_tag, $safe_content);
 
         // Повертаємо захищені блоки на місце
         return $this->restore_protected_blocks($new_content, $extracted);
-
     }
+
 
     /**
      * Додає таблицю з корисною інформацією та блок Питання-Відповіді
