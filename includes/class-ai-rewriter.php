@@ -119,38 +119,49 @@ class GSC_Opt_AI_Rewriter
     }
 
     /**
-     * Вставляє HTML-таблицю з важливими фактами в середину контенту.
+     * Додає таблицю з корисною інформацією та блок Питання-Відповіді
+     * в кінець статті (перед захищеними блоками).
      */
-    public function insert_table_in_middle(string $content, string $post_title): string
+    public function append_seo_content(string $content, string $post_title): string
     {
         // Витягуємо захищені блоки перед обробкою
         [$safe_content, $extracted] = $this->extract_protected_blocks($content);
 
-        $prompt = "Ти — SEO-копірайтер. Створи HTML-таблицю з 4-6 рядками важливих фактів або характеристик, "
-            . "яка стосується теми: «{$post_title}». "
-            . "Таблиця має мати два стовпці: «Характеристика» і «Значення / Деталі». "
-            . "Таблиця має бути у тегах <table class=\"gsc-opt-table\">...</table>. "
-            . "Відповідь — тільки HTML-таблиця, без пояснень.";
+        // ── Таблиця ───────────────────────────────────────────────────────────
+        $table_prompt = "Ти — SEO-копірайтер. Створи HTML-таблицю з 5-7 рядками корисної інформації по темі: «{$post_title}». "
+            . "Таблиця має мати два стовпці: перший — назва характеристики або факту, другий — значення або пояснення. "
+            . "Використай теги: <table class=\"gsc-opt-table\"><thead><tr><th>...</th><th>...</th></tr></thead><tbody>...</tbody></table>. "
+            . "Відповідь — ТІЛЬКИ HTML-таблиця. Без пояснень, без markdown, без зайвого тексту.";
 
-        $table_html = $this->ask_ai($prompt);
+        $table_html = $this->ask_ai($table_prompt);
 
-        if (empty($table_html) || strpos($table_html, '<table') === false) {
+        // ── FAQ (Питання-Відповіді) ───────────────────────────────────────────
+        $faq_prompt = "Ти — SEO-копірайтер. Склади 4-5 питань і відповідей (FAQ) по темі: «{$post_title}». "
+            . "Формат відповіді — тільки HTML, без markdown. Структура: "
+            . "<div class=\"gsc-opt-faq\"><h3>Питання і відповіді</h3>"
+            . "<div class=\"gsc-opt-faq-item\"><h4>Питання?</h4><p>Відповідь.</p></div>...</div>. "
+            . "Відповідь — ТІЛЬКИ HTML. Без пояснень, без markdown.";
+
+        $faq_html = $this->ask_ai($faq_prompt);
+
+        // ── Додаємо в кінець ──────────────────────────────────────────────────
+        $append = '';
+
+        if (!empty($table_html) && strpos($table_html, '<table') !== false) {
+            $append .= "\n\n" . $table_html;
+        }
+
+        if (!empty($faq_html) && strpos($faq_html, '<div') !== false) {
+            $append .= "\n\n" . $faq_html;
+        }
+
+        if (empty($append)) {
             return $content;
         }
 
-        // Знаходимо всі <p> в безпечному контенті (без захищених блоків)
-        preg_match_all('/<p[^>]*>.*?<\/p>/is', $safe_content, $all_p);
-        $p_count = count($all_p[0]);
+        $new_content = $safe_content . $append;
 
-        if ($p_count < 2) {
-            $new_content = $safe_content . "\n\n" . $table_html;
-        } else {
-            $mid_index = (int) floor($p_count / 2);
-            $target_p = $all_p[0][$mid_index];
-            $new_content = str_replace($target_p, $target_p . "\n\n" . $table_html, $safe_content);
-        }
-
-        // Повертаємо захищені блоки на місце
+        // Повертаємо захищені блоки на місце (вони залишаються в самому кінці)
         return $this->restore_protected_blocks($new_content, $extracted);
     }
 

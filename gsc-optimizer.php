@@ -104,7 +104,7 @@ function gsc_opt_run_check()
             }
 
             $new_content = $rewriter->rewrite_first_paragraph($post->post_content, $post->post_title);
-            $new_content = $rewriter->insert_table_in_middle($new_content, $post->post_title);
+            $new_content = $rewriter->append_seo_content($new_content, $post->post_title);
 
             $updated = $updater->update_post($post_id, $new_content);
 
@@ -247,7 +247,7 @@ function gsc_opt_ajax_update_post()
         $rewriter = new GSC_Opt_AI_Rewriter($options['ai_provider'] ?? 'gemini', $options['ai_api_key'] ?? '');
         $updater = new GSC_Opt_Post_Updater();
         $new_content = $rewriter->rewrite_first_paragraph($post->post_content, $post->post_title);
-        $new_content = $rewriter->insert_table_in_middle($new_content, $post->post_title);
+        $new_content = $rewriter->append_seo_content($new_content, $post->post_title);
         $updater->update_post($post_id, $new_content);
         wp_send_json_success('Пост #' . $post_id . ' оновлено!');
     } catch (Exception $e) {
