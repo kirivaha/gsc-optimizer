@@ -14,10 +14,61 @@ class GSC_Opt_AI_Rewriter
     private string $provider;
     private string $api_key;
 
+    /**
+     * Блоки Gutenberg, які не можна редагувати через AI.
+     * Формат: назва типу блоку (після wp:)
+     */
+    private array $protected_blocks = [
+        'treba/happybirthday-block',
+        'treba/faq-block',
+        'treba/important-block',
+        'treba/important-list',
+    ];
+
     public function __construct(string $provider, string $api_key)
     {
         $this->provider = $provider; // 'gemini' | 'openai'
         $this->api_key = $api_key;
+    }
+
+    // ── Захист блоків ─────────────────────────────────────────────────────────
+
+    /**
+     * Витягує захищені блоки з контенту, замінює на плейсхолдери.
+     * Повертає [контент_з_плейсхолдерами, масив_витягнутих_блоків]
+     */
+    private function extract_protected_blocks(string $content): array
+    {
+        $extracted = [];
+        $index = 0;
+
+        foreach ($this->protected_blocks as $block_name) {
+            // Екрануємо слеш для regex (treba/faq-block → treba\/faq-block)
+            $escaped = preg_quote($block_name, '/');
+
+            // Шаблон: <!-- wp:treba/... --> ... <!-- /wp:treba/... -->
+            $pattern = '/<!--\s*wp:' . $escaped . '[\s\S]*?<!--\s*\/wp:' . $escaped . '\s*-->/i';
+
+            $content = preg_replace_callback($pattern, function ($matches) use (&$extracted, &$index) {
+                $placeholder = '%%GSC_PROTECTED_BLOCK_' . $index . '%%';
+                $extracted[$placeholder] = $matches[0];
+                $index++;
+                return $placeholder;
+            }, $content);
+        }
+
+        return [$content, $extracted];
+    }
+
+    /**
+     * Повертає захищені блоки на своє місце.
+     */
+    private function restore_protected_blocks(string $content, array $extracted): string
+    {
+        foreach ($extracted as $placeholder => $block_html) {
+            $content = str_replace($placeholder, $block_html, $content);
+        }
+        return $content;
     }
 
     // ── Публічні методи ───────────────────────────────────────────────────────
@@ -27,8 +78,11 @@ class GSC_Opt_AI_Rewriter
      */
     public function rewrite_first_paragraph(string $content, string $post_title): string
     {
-        // Знаходимо перший <p>...</p>
-        if (!preg_match('/<p[^>]*>(.*?)<\/p>/is', $content, $matches)) {
+        // Витягуємо захищені блоки перед обробкою
+        [$safe_content, $extracted] = $this->extract_protected_blocks($content);
+
+        // Знаходимо перший <p>...</p> (вже без захищених блоків)
+        if (!preg_match('/<p[^>]*>(.*?)<\/p>/is', $safe_content, $matches)) {
             return $content; // Немає абзацу — залишаємо як є
         }
 
@@ -51,9 +105,10 @@ class GSC_Opt_AI_Rewriter
         }
 
         $new_tag = '<p>' . esc_html($new_text) . '</p>';
-        $new_content = str_replace($original_tag, $new_tag, $content);
+        $new_content = str_replace($original_tag, $new_tag, $safe_content);
 
-        return $new_content;
+        // Повертаємо захищені блоки на місце
+        return $this->restore_protected_blocks($new_content, $extracted);
     }
 
     /**
@@ -61,6 +116,9 @@ class GSC_Opt_AI_Rewriter
      */
     public function insert_table_in_middle(string $content, string $post_title): string
     {
+        // Витягуємо захищені блоки перед обробкою
+        [$safe_content, $extracted] = $this->extract_protected_blocks($content);
+
         $prompt = "Ти — SEO-копірайтер. Створи HTML-таблицю з 4-6 рядками важливих фактів або характеристик, "
             . "яка стосується теми: «{$post_title}». "
             . "Таблиця має мати два стовпці: «Характеристика» і «Значення / Деталі». "
@@ -73,19 +131,20 @@ class GSC_Opt_AI_Rewriter
             return $content;
         }
 
-        // Знаходимо всі <p> в контенті та вставляємо після середнього
-        preg_match_all('/<p[^>]*>.*?<\/p>/is', $content, $all_p);
+        // Знаходимо всі <p> в безпечному контенті (без захищених блоків)
+        preg_match_all('/<p[^>]*>.*?<\/p>/is', $safe_content, $all_p);
         $p_count = count($all_p[0]);
 
         if ($p_count < 2) {
-            return $content . "\n\n" . $table_html;
+            $new_content = $safe_content . "\n\n" . $table_html;
+        } else {
+            $mid_index = (int) floor($p_count / 2);
+            $target_p = $all_p[0][$mid_index];
+            $new_content = str_replace($target_p, $target_p . "\n\n" . $table_html, $safe_content);
         }
 
-        $mid_index = (int) floor($p_count / 2);
-        $target_p = $all_p[0][$mid_index];
-        $new_content = str_replace($target_p, $target_p . "\n\n" . $table_html, $content);
-
-        return $new_content;
+        // Повертаємо захищені блоки на місце
+        return $this->restore_protected_blocks($new_content, $extracted);
     }
 
     // ── Приватні методи ───────────────────────────────────────────────────────
