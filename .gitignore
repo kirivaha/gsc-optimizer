@@ -1,0 +1,15 @@
+# Секретні файли — НІКОЛИ не завантажувати на GitHub
+credentials.json
+service-account.json
+*.json.key
+*-credentials.json
+*-service-account.json
+.env
+.env.*
+
+# Залежності (великі, не потрібні на GitHub)
+/vendor/
+
+# Системні файли
+.DS_Store
+Thumbs.db
