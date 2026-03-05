@@ -183,6 +183,42 @@ function gsc_opt_admin_assets($hook)
     ]);
 }
 
+// ── AJAX: Preview rewrite (dry run) ──────────────────────────────────────────
+add_action('wp_ajax_gsc_opt_preview_rewrite', 'gsc_opt_ajax_preview_rewrite');
+
+function gsc_opt_ajax_preview_rewrite()
+{
+    check_ajax_referer('gsc_opt_nonce', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('Forbidden');
+    }
+
+    $post_url = esc_url_raw($_POST['post_url'] ?? '');
+    $post_id = url_to_postid($post_url);
+    if (!$post_id) {
+        wp_send_json_error('Пост не знайдено для URL: ' . $post_url);
+    }
+
+    $post = get_post($post_id);
+    $options = get_option('gsc_optimizer_settings', []);
+
+    try {
+        $rewriter = new GSC_Opt_AI_Rewriter(
+            $options['ai_provider'] ?? 'gemini',
+            $options['ai_api_key'] ?? ''
+        );
+        $result = $rewriter->get_diagnostic_info($post->post_content, $post->post_title);
+
+        if (isset($result['error'])) {
+            wp_send_json_error($result['error']);
+        }
+
+        wp_send_json_success($result);
+
+    } catch (Exception $e) {
+        wp_send_json_error('Помилка: ' . $e->getMessage());
+    }
+}
 // ── AJAX: Run check manually ──────────────────────────────────────────────────
 add_action('wp_ajax_gsc_opt_run_check', 'gsc_opt_ajax_run_check');
 

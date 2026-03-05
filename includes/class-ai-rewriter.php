@@ -214,6 +214,48 @@ class GSC_Opt_AI_Rewriter
         return $this->restore_protected_blocks($new_content, $extracted);
     }
 
+    // ── Діагностика (dry run, без збереження) ────────────────────────────────
+
+    /**
+     * Знаходить перший абзац та викликає AI — без збереження.
+     * Повертає масив з діагностичною інформацією.
+     */
+    public function get_diagnostic_info(string $content, string $post_title): array
+    {
+        // Знаходимо перший параграф
+        $gb_pattern = '/(<!--\s*wp:paragraph(?:[\s\S]*?)-->)\s*(<p[^>]*>(.*?)<\/p>)\s*(<!--\s*\/wp:paragraph\s*-->)/is';
+        $has_gb = preg_match($gb_pattern, $content, $gb_matches);
+
+        if ($has_gb) {
+            $found_text = strip_tags($gb_matches[3]);
+            $paragraph_type = 'gutenberg';
+        } elseif (preg_match('/<p[^>]*>(.*?)<\/p>/is', $content, $p_matches)) {
+            $found_text = strip_tags($p_matches[1]);
+            $paragraph_type = 'plain';
+        } else {
+            return ['error' => 'Перший абзац не знайдено в контенті.'];
+        }
+
+        if (mb_strlen($found_text) < 30) {
+            return ['error' => 'Знайдений абзац занадто короткий (< 30 символів).'];
+        }
+
+        // Викликаємо AI (ask_ai — private, але ми всередині класу)
+        $prompt = "Ти — SEO-копірайтер. Перепиши наступний абзац іншими словами, зберігаючи зміст абзацу. "
+            . "Заголовок сторінки: «{$post_title}». "
+            . "Абзац для переписування:\n\n{$found_text}\n\n"
+            . "Відповідь — ТІЛЬКИ новий текст абзацу. Без HTML, без markdown, без пояснень.";
+
+        $ai_response = $this->ask_ai($prompt);
+
+        return [
+            'paragraph_type' => $paragraph_type,
+            'found_paragraph' => $found_text,
+            'ai_response' => $ai_response,
+            'ai_response_length' => mb_strlen($ai_response),
+        ];
+    }
+
     // ── Приватні методи ───────────────────────────────────────────────────────
 
     private function ask_ai(string $prompt): string

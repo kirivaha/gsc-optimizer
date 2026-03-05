@@ -178,6 +178,7 @@ $threshold = (float) ($options['threshold'] ?? 10.0);
                 <input type="url" id="gsc-debug-url" placeholder="https://hmarno.v.ua/..."
                     style="flex:1; min-width:300px; padding:6px 10px; border:1px solid #ccc; border-radius:4px;" />
                 <button id="gsc-debug-content" class="button button-secondary">🔍 Debug Content</button>
+                <button id="gsc-preview-rewrite" class="button button-secondary">🔬 Preview Rewrite</button>
                 <button id="gsc-manual-update" class="button button-primary">🤖 Оновити через AI</button>
             </div>
 
