@@ -165,4 +165,24 @@ $threshold = (float) ($options['threshold'] ?? 10.0);
         <?php endif; ?>
 
     <?php endif; ?>
+
+    <?php if ($has_config): ?>
+        <!-- ── Debug / Ручне оновлення ────────────────────────────────────── -->
+        <div class="gsc-opt-debug-box"
+            style="margin-top:40px; border:1px solid #ddd; border-radius:6px; padding:20px; background:#fafafa;">
+            <h2 style="margin-top:0;">🛠 Debug / Ручне оновлення</h2>
+            <p style="color:#666; margin-top:0;">Вставте URL сторінки, щоб перевірити її контент або запустити AI-оновлення
+                вручну.</p>
+
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <input type="url" id="gsc-debug-url" placeholder="https://hmarno.v.ua/..."
+                    style="flex:1; min-width:300px; padding:6px 10px; border:1px solid #ccc; border-radius:4px;" />
+                <button id="gsc-debug-content" class="button button-secondary">🔍 Debug Content</button>
+                <button id="gsc-manual-update" class="button button-primary">🤖 Оновити через AI</button>
+            </div>
+
+            <div id="gsc-debug-result" style="display:none; margin-top:20px;"></div>
+        </div>
+    <?php endif; ?>
+
 </div>
