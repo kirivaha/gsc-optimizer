@@ -94,19 +94,34 @@ class GSC_Opt_AI_Rewriter
 
     /**
      * Переписує перший абзац у WordPress-контенті іншими словами.
+     * Зберігає Gutenberg-обгортку <!-- wp:paragraph --> якщо вона є.
      */
     public function rewrite_first_paragraph(string $content, string $post_title): string
     {
         // Витягуємо захищені блоки перед обробкою
         [$safe_content, $extracted] = $this->extract_protected_blocks($content);
 
-        // Знаходимо перший <p>...</p> (вже без захищених блоків)
-        if (!preg_match('/<p[^>]*>(.*?)<\/p>/is', $safe_content, $matches)) {
-            return $content; // Немає абзацу — залишаємо як є
-        }
+        // Спочатку шукаємо Gutenberg-блок параграфу: <!-- wp:paragraph ... --><p>...</p><!-- /wp:paragraph -->
+        $gutenberg_pattern = '/(\/\*|<!--\s*wp:paragraph(?:[\s\S]*?)-->)\s*(<p[^>]*>(.*?)<\/p>)\s*(<!--\s*\/wp:paragraph\s*-->)/is';
+        $has_gutenberg = preg_match($gutenberg_pattern, $safe_content, $gb_matches);
 
-        $original_tag = $matches[0];
-        $original_text = strip_tags($matches[1]);
+        if ($has_gutenberg) {
+            $full_block = $gb_matches[0];   // весь блок від <!-- wp:paragraph --> до <!-- /wp:paragraph -->
+            $open_comment = $gb_matches[1];   // <!-- wp:paragraph -->
+            $p_tag = $gb_matches[2];   // <p>...</p>
+            $original_text = strip_tags($gb_matches[3]);
+            $close_comment = $gb_matches[4];   // <!-- /wp:paragraph -->
+        } else {
+            // Fallback: звичайний <p> без Gutenberg
+            if (!preg_match('/<p[^>]*>(.*?)<\/p>/is', $safe_content, $matches)) {
+                return $content;
+            }
+            $p_tag = $matches[0];
+            $original_text = strip_tags($matches[1]);
+            $full_block = $p_tag;
+            $open_comment = '';
+            $close_comment = '';
+        }
 
         if (mb_strlen($original_text) < 30) {
             return $content; // Занадто короткий — пропускаємо
@@ -125,8 +140,16 @@ class GSC_Opt_AI_Rewriter
 
         // Очищаємо відповідь AI від будь-якої розмітки
         $new_text = $this->strip_gutenberg_markup($new_text);
-        $new_tag = '<p>' . $new_text . '</p>';
-        $new_content = str_replace($original_tag, $new_tag, $safe_content);
+
+        // Збираємо новий блок зі збереженою Gutenberg-обгорткою
+        $new_p_tag = '<p>' . $new_text . '</p>';
+        if ($open_comment) {
+            $new_block = $open_comment . "\n" . $new_p_tag . "\n" . $close_comment;
+        } else {
+            $new_block = $new_p_tag;
+        }
+
+        $new_content = str_replace($full_block, $new_block, $safe_content);
 
         // Повертаємо захищені блоки на місце
         return $this->restore_protected_blocks($new_content, $extracted);
@@ -159,7 +182,7 @@ class GSC_Opt_AI_Rewriter
 
         $faq_html = $this->ask_ai($faq_prompt);
 
-        // ── Додаємо в кінець (з очищенням від Gutenberg-коментарів) ─────────
+        // ── Додаємо в кінець як Gutenberg HTML-блоки ────────────────────────
         $append = '';
 
         if (!empty($table_html)) {
@@ -167,7 +190,8 @@ class GSC_Opt_AI_Rewriter
             $table_html = preg_replace('/<!--.*?-->/s', '', $table_html);
             $table_html = trim($table_html);
             if (strpos($table_html, '<table') !== false) {
-                $append .= "\n\n" . $table_html;
+                // Обгортаємо в wp:html блок — Gutenberg зберігає довільний HTML без помилок
+                $append .= "\n\n<!-- wp:html -->\n" . $table_html . "\n<!-- /wp:html -->";
             }
         }
 
@@ -176,7 +200,7 @@ class GSC_Opt_AI_Rewriter
             $faq_html = preg_replace('/<!--.*?-->/s', '', $faq_html);
             $faq_html = trim($faq_html);
             if (strpos($faq_html, '<div') !== false || strpos($faq_html, '<h') !== false) {
-                $append .= "\n\n" . $faq_html;
+                $append .= "\n\n<!-- wp:html -->\n" . $faq_html . "\n<!-- /wp:html -->";
             }
         }
 
