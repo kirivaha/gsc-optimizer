@@ -253,6 +253,7 @@ class GSC_Opt_AI_Rewriter
             'found_paragraph' => $found_text,
             'ai_response' => $ai_response,
             'ai_response_length' => mb_strlen($ai_response),
+            'provider' => $this->provider,
         ];
     }
 
@@ -294,9 +295,23 @@ class GSC_Opt_AI_Rewriter
             throw new \RuntimeException('Gemini HTTP error: ' . $response->get_error_message());
         }
 
+        $http_code = wp_remote_retrieve_response_code($response);
         $data = json_decode(wp_remote_retrieve_body($response), true);
 
-        return trim($data['candidates'][0]['content']['parts'][0]['text'] ?? '');
+        // Якщо API повернув помилку — кидаємо exception з деталями
+        if (!empty($data['error'])) {
+            $msg = $data['error']['message'] ?? 'невідома помилка';
+            $code = $data['error']['code'] ?? $http_code;
+            throw new \RuntimeException("Gemini API error [{$code}]: {$msg}");
+        }
+
+        $text = $data['candidates'][0]['content']['parts'][0]['text'] ?? '';
+
+        if (empty(trim($text)) && empty($data['candidates'])) {
+            throw new \RuntimeException('Gemini API повернув порожню відповідь. HTTP ' . $http_code . '. Body: ' . substr(wp_remote_retrieve_body($response), 0, 300));
+        }
+
+        return trim($text);
     }
 
     private function ask_openai(string $prompt): string
