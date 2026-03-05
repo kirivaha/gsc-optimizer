@@ -13,7 +13,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('GSC_OPT_VERSION', '1.0.0');
+define('GSC_OPT_VERSION', '1.1.0');
 define('GSC_OPT_DIR', plugin_dir_path(__FILE__));
 define('GSC_OPT_URL', plugin_dir_url(__FILE__));
 
