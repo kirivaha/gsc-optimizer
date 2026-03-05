@@ -125,44 +125,6 @@
             });
     });
 
-
-    // ── Preview Rewrite (dry run) ─────────────────────────────────────────────
-    $('#gsc-preview-rewrite').on('click', function () {
-        const url = $('#gsc-debug-url').val().trim();
-        if (!url) { alert('Введіть URL сторінки.'); return; }
-
-        const $btn = $(this);
-        const $result = $('#gsc-debug-result');
-        $btn.prop('disabled', true);
-        $result.show().html('<p style="color:#888;">⏳ Знаходимо перший абзац та питаємо AI... (~15 сек)</p>');
-
-        $.post(gscOpt.ajax_url, {
-            action: 'gsc_opt_preview_rewrite',
-            nonce: gscOpt.nonce,
-            post_url: url
-        })
-            .done(function (res) {
-                if (res.success) {
-                    const d = res.data;
-                    $result.html(
-                        '<p><strong>Тип параграфу:</strong> ' + d.paragraph_type + '</p>' +
-                        '<p><strong>Знайдений перший абзац (він буде переписаний):</strong></p>' +
-                        '<textarea readonly style="width:100%;height:80px;font-family:monospace;font-size:12px;border:1px solid #ccc;padding:6px;">' + d.found_paragraph + '</textarea>' +
-                        '<p><strong>Відповідь AI (' + d.ai_response_length + ' символів):</strong></p>' +
-                        '<textarea readonly style="width:100%;height:80px;font-family:monospace;font-size:12px;border:1px solid #2e7d32;padding:6px;">' + d.ai_response + '</textarea>'
-                    );
-                } else {
-                    $result.html('<p style="color:red;">❌ ' + res.data + '</p>');
-                }
-            })
-            .fail(function () {
-                $result.html('<p style="color:red;">❌ Помилка мережі.</p>');
-            })
-            .always(function () {
-                $btn.prop('disabled', false);
-            });
-    });
-
     // ── Ручне AI-оновлення по URL ─────────────────────────────────────────────
     $('#gsc-manual-update').on('click', function () {
         const url = $('#gsc-debug-url').val().trim();
