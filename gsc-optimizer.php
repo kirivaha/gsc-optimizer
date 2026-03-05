@@ -257,6 +257,7 @@ function gsc_opt_ajax_update_post()
 
 // ── AJAX: Debug — показати сирий контент поста ────────────────────────────────
 add_action('wp_ajax_gsc_opt_debug_content', 'gsc_opt_ajax_debug_content');
+add_action('wp_ajax_gsc_opt_preview_rewrite', 'gsc_opt_ajax_preview_rewrite');
 
 function gsc_opt_ajax_debug_content()
 {
@@ -303,3 +304,68 @@ function gsc_opt_ajax_debug_content()
         'found_blocks' => $found_blocks,
     ]);
 }
+
+// ── AJAX: Preview rewrite — dry run без збереження ────────────────────────────
+function gsc_opt_ajax_preview_rewrite()
+{
+    check_ajax_referer('gsc_opt_nonce', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error('Forbidden');
+    }
+
+    $post_url = esc_url_raw($_POST['post_url'] ?? '');
+    $post_id = url_to_postid($post_url);
+
+    if (!$post_id) {
+        wp_send_json_error('Пост не знайдено для URL: ' . $post_url);
+    }
+
+    $post = get_post($post_id);
+    $options = get_option('gsc_optimizer_settings', []);
+
+    try {
+        $rewriter = new GSC_Opt_AI_Rewriter(
+            $options['ai_provider'] ?? 'gemini',
+            $options['ai_api_key'] ?? ''
+        );
+
+        // ── Крок 1: знаходимо перший абзац ───────────────────────────────
+        $content = $post->post_content;
+
+        // Визначаємо Gutenberg-параграф
+        $gb_pattern = '/(<!--\s*wp:paragraph(?:[\s\S]*?)-->)\s*(<p[^>]*>(.*?)<\/p>)\s*(<!--\s*\/wp:paragraph\s*-->)/is';
+        $has_gb = preg_match($gb_pattern, $content, $gb_matches);
+
+        if ($has_gb) {
+            $found_paragraph = strip_tags($gb_matches[3]);
+            $paragraph_type = 'gutenberg';
+        } elseif (preg_match('/<p[^>]*>(.*?)<\/p>/is', $content, $p_matches)) {
+            $found_paragraph = strip_tags($p_matches[1]);
+            $paragraph_type = 'plain';
+        } else {
+            wp_send_json_error('Перший абзац не знайдено в контенті.');
+        }
+
+        // ── Крок 2: викликаємо AI ─────────────────────────────────────────
+        $prompt = "Ти — SEO-копірайтер. Перепиши наступний абзац іншими словами, зберігаючи зміст абзацу. "
+            . "Заголовок сторінки: «{$post->post_title}». "
+            . "Абзац для переписування:\n\n{$found_paragraph}\n\n"
+            . "Відповідь — ТІЛЬКИ новий текст абзацу. Без HTML, без markdown, без пояснень.";
+
+        // Викликаємо через рефлексію приватного методу
+        $ref = new ReflectionMethod(get_class($rewriter), 'ask_ai');
+        $ref->setAccessible(true);
+        $ai_response = $ref->invoke($rewriter, $prompt);
+
+        wp_send_json_success([
+            'paragraph_type' => $paragraph_type,
+            'found_paragraph' => htmlspecialchars($found_paragraph),
+            'ai_response' => htmlspecialchars($ai_response),
+            'ai_response_length' => mb_strlen($ai_response),
+        ]);
+
+    } catch (Exception $e) {
+        wp_send_json_error('Помилка: ' . $e->getMessage());
+    }
+}
+
