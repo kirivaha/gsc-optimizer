@@ -338,8 +338,22 @@ class GSC_Opt_AI_Rewriter
             throw new \RuntimeException('OpenAI HTTP error: ' . $response->get_error_message());
         }
 
+        $http_code = wp_remote_retrieve_response_code($response);
         $data = json_decode(wp_remote_retrieve_body($response), true);
 
-        return trim($data['choices'][0]['message']['content'] ?? '');
+        // Якщо OpenAI повернув помилку — кидаємо exception з деталями
+        if (!empty($data['error'])) {
+            $msg = $data['error']['message'] ?? 'невідома помилка';
+            $type = $data['error']['type'] ?? '';
+            throw new \RuntimeException("OpenAI API error [{$http_code}] {$type}: {$msg}");
+        }
+
+        $text = $data['choices'][0]['message']['content'] ?? '';
+
+        if (empty(trim($text))) {
+            throw new \RuntimeException('OpenAI повернув порожню відповідь. HTTP ' . $http_code . '. Body: ' . substr(wp_remote_retrieve_body($response), 0, 300));
+        }
+
+        return trim($text);
     }
 }
