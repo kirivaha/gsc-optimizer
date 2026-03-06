@@ -102,7 +102,7 @@ class GSC_Opt_AI_Rewriter
         [$safe_content, $extracted] = $this->extract_protected_blocks($content);
 
         // Спочатку шукаємо Gutenberg-блок параграфу: <!-- wp:paragraph ... --><p>...</p><!-- /wp:paragraph -->
-        $gutenberg_pattern = '/(\/\*|<!--\s*wp:paragraph(?:[\s\S]*?)-->)\s*(<p[^>]*>(.*?)<\/p>)\s*(<!--\s*\/wp:paragraph\s*-->)/is';
+        $gutenberg_pattern = '/(<!--\s*wp:paragraph(?:[\s\S]*?)-->)\s*(<p[^>]*>(.*?)<\/p>)\s*(<!--\s*\/wp:paragraph\s*-->)/is';
         $has_gutenberg = preg_match($gutenberg_pattern, $safe_content, $gb_matches);
 
         if ($has_gutenberg) {
@@ -158,13 +158,11 @@ class GSC_Opt_AI_Rewriter
 
     /**
      * Додає таблицю з корисною інформацією та блок Питання-Відповіді
-     * в кінець статті (перед захищеними блоками).
+     * в кінець статті АБО перед захищеними carbon-fields блоками.
+     * Не змінює жодного carbon-fields блоку.
      */
     public function append_seo_content(string $content, string $post_title): string
     {
-        // Витягуємо захищені блоки перед обробкою
-        [$safe_content, $extracted] = $this->extract_protected_blocks($content);
-
         // ── Таблиця ───────────────────────────────────────────────────────────
         $table_prompt = "Ти — SEO-копірайтер. Створи HTML-таблицю з 5-7 рядками корисної інформації по темі: «{$post_title}». "
             . "Таблиця має мати два стовпці: перший — назва характеристики або факту, другий — значення або пояснення. "
@@ -182,21 +180,19 @@ class GSC_Opt_AI_Rewriter
 
         $faq_html = $this->ask_ai($faq_prompt);
 
-        // ── Додаємо в кінець як Gutenberg HTML-блоки ────────────────────────
+        // ── Формуємо блок для вставки ─────────────────────────────────────────
         $append = '';
 
         if (!empty($table_html)) {
-            // Видаляємо Gutenberg-коментарі, але залишаємо HTML-теги таблиці
+            // Видаляємо Gutenberg-коментарі з відповіді AI
             $table_html = preg_replace('/<!--.*?-->/s', '', $table_html);
             $table_html = trim($table_html);
             if (strpos($table_html, '<table') !== false) {
-                // Обгортаємо в wp:html блок — Gutenberg зберігає довільний HTML без помилок
                 $append .= "\n\n<!-- wp:html -->\n" . $table_html . "\n<!-- /wp:html -->";
             }
         }
 
         if (!empty($faq_html)) {
-            // Видаляємо Gutenberg-коментарі, але залишаємо HTML-теги
             $faq_html = preg_replace('/<!--.*?-->/s', '', $faq_html);
             $faq_html = trim($faq_html);
             if (strpos($faq_html, '<div') !== false || strpos($faq_html, '<h') !== false) {
@@ -208,10 +204,28 @@ class GSC_Opt_AI_Rewriter
             return $content;
         }
 
-        $new_content = $safe_content . $append;
+        // ── Знаходимо позицію ПЕРЕД першим carbon-fields блоком ──────────────
+        // Шукаємо будь-який carbon-fields блок
+        $cf_pos = false;
+        foreach ($this->protected_blocks as $block_name) {
+            $search = '<!-- wp:' . $block_name;
+            $pos = strpos($content, $search);
+            if ($pos !== false) {
+                if ($cf_pos === false || $pos < $cf_pos) {
+                    $cf_pos = $pos;
+                }
+            }
+        }
 
-        // Повертаємо захищені блоки на місце (вони залишаються в самому кінці)
-        return $this->restore_protected_blocks($new_content, $extracted);
+        if ($cf_pos !== false) {
+            // Вставляємо ПЕРЕД найпершим carbon-fields блоком
+            return substr($content, 0, $cf_pos)
+                . $append . "\n\n"
+                . substr($content, $cf_pos);
+        }
+
+        // Якщо carbon-fields блоків немає — додаємо в кінець
+        return $content . $append;
     }
 
     // ── Діагностика (dry run, без збереження) ────────────────────────────────
